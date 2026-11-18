@@ -1,0 +1,10 @@
+id = "xavierandueza.herdrinclude"
+name = "herdrinclude"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Copy .worktreeinclude files into new worktrees, then run the repo's .worktreesetup"
+platforms = ["macos", "linux"]
+
+[[events]]
+on = "worktree.created"
+command = ["bash", "worktree-created.sh"]
