@@ -31,9 +31,19 @@ An executable script at the repository root. It runs after the copy step:
 - the working directory is the new checkout
 - `WORKTREE_SOURCE` is the main checkout's path
 
-It must be untracked (gitignored or listed in `.git/info/exclude`). A committed
-`.worktreesetup` never runs, so cloning a repository cannot make this plugin
-execute the repository author's code.
+An untracked `.worktreesetup` (gitignored or listed in `.git/info/exclude`)
+always runs. A committed one is code from anyone who can push to the repo, so it
+only runs when the repository is listed in `trusted-repos` in the plugin's
+config directory (`herdr plugin config-dir xavierandueza.herdrinclude`):
+
+```text
+# One main checkout per line; ~ expands to $HOME.
+~/projects/backend
+/srv/work/frontend
+```
+
+List the main checkout, not a worktree: the hook always runs the main
+checkout's `.worktreesetup`.
 
 Example: trust the copied `.envrc` and build the nix-direnv cache, so the new
 pane has its dev shell straight away.

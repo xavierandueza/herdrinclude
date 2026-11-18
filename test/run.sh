@@ -37,8 +37,11 @@ make_repo() {
 }
 
 run_hook() {
-  HERDR_PLUGIN_EVENT_JSON=$1 bash "$hook" >"$tmp/last.log" 2>&1
+  HERDR_PLUGIN_CONFIG_DIR=$config_dir HERDR_PLUGIN_EVENT_JSON=$1 bash "$hook" >"$tmp/last.log" 2>&1
 }
+
+config_dir="$tmp/config"
+mkdir -p "$config_dir"
 
 # Copying and running an untracked setup script.
 repo="$tmp/repo"
@@ -70,7 +73,7 @@ run_hook "{\"worktree\":{\"path\":\"$wt\"}}"
 check "keeps files already in the checkout" test "$(cat "$wt/.env")" = mine
 check "finds the source repo without repo_root" test -f "$wt/setup-ran"
 
-# A committed setup script never runs.
+# A committed setup script only runs in a trusted repo.
 repo="$tmp/tracked"
 make_repo "$repo"
 printf '#!/usr/bin/env bash\ntouch setup-ran\n' >"$repo/.worktreesetup"
@@ -80,8 +83,30 @@ git_quiet -C "$repo" commit -m setup
 wt="$tmp/wt-c"
 git_quiet -C "$repo" worktree add "$wt" -b c
 run_hook "{\"data\":{\"worktree\":{\"path\":\"$wt\"}}}"
-check "skips a tracked .worktreesetup" test ! -e "$wt/setup-ran"
-check "explains the skip" grep -q 'tracked by git' "$tmp/last.log"
+check "skips a tracked .worktreesetup without trusted-repos" test ! -e "$wt/setup-ran"
+check "explains the skip" grep -q 'not in .*trusted-repos' "$tmp/last.log"
+
+printf '# other repos\n%s\n' "$tmp/repo" >"$config_dir/trusted-repos"
+wt="$tmp/wt-e"
+git_quiet -C "$repo" worktree add "$wt" -b e
+run_hook "{\"worktree\":{\"path\":\"$wt\"}}"
+check "skips a tracked .worktreesetup in an untrusted repo" test ! -e "$wt/setup-ran"
+
+ln -s "$repo" "$tmp/tracked-link"
+printf '%s\n  %s/  # trusted\n' "$tmp/repo" "$tmp/tracked-link" >"$config_dir/trusted-repos"
+wt="$tmp/wt-f"
+git_quiet -C "$repo" worktree add "$wt" -b f
+run_hook "{\"worktree\":{\"path\":\"$wt\"}}"
+check "runs a tracked .worktreesetup in a trusted repo" test -f "$wt/setup-ran"
+check "says why it ran" grep -q 'is trusted' "$tmp/last.log"
+
+# shellcheck disable=SC2088
+echo '~/tracked' >"$config_dir/trusted-repos"
+wt="$tmp/wt-g"
+git_quiet -C "$repo" worktree add "$wt" -b g
+HOME=$tmp run_hook "{\"worktree\":{\"path\":\"$wt\"}}"
+check "expands ~ in trusted-repos" test -f "$wt/setup-ran"
+rm -f "$config_dir/trusted-repos"
 
 # A failing setup script fails the hook so Herdr logs it.
 repo="$tmp/failing"
